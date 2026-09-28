@@ -184,6 +184,28 @@ input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-
 .sh-manual{width:100%;min-height:56px;text-align:center;font-size:20px;font-weight:800;
   font-variant-numeric:tabular-nums;margin-bottom:12px}
 .qadd{width:100%;margin:10px 0 2px;min-height:52px;font-weight:800;font-size:15px}
+/* ---------- Daily Goal ---------- */
+.gbar{height:12px;border-radius:99px;background:rgba(255,255,255,.08);overflow:hidden;margin-top:10px}
+.gbar i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--green),var(--lime));
+  box-shadow:0 0 14px rgba(163,230,53,.55);transition:width .3s}
+.gdots{display:flex;gap:9px;justify-content:center;margin-top:10px}
+.gdot{font-size:13px;color:var(--mu)}
+.gdot.hit{color:var(--lime);text-shadow:0 0 10px rgba(163,230,53,.7)}
+.gedit{margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.seg button.on{background:rgba(163,230,53,.14);border-color:var(--lime);color:var(--lime);
+  box-shadow:0 0 12px rgba(163,230,53,.25)}
+#confetti{position:fixed;inset:0;z-index:100;pointer-events:none;display:none}
+/* ---------- Rank / community ---------- */
+.pct-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.lb-row{display:flex;align-items:center;gap:10px;padding:9px 2px}
+.lb-row + .lb-row{border-top:1px solid var(--line)}
+.lb-pos{width:32px;flex:none;font-weight:900;text-align:center;color:var(--mu);font-variant-numeric:tabular-nums}
+.lb-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700}
+.lb-val{font-weight:900;font-variant-numeric:tabular-nums;color:var(--lime)}
+.medal1{color:#ffd60a;text-shadow:0 0 12px rgba(255,214,10,.6)}
+.medal2{color:#c9d4e3;text-shadow:0 0 12px rgba(201,212,227,.5)}
+.medal3{color:#e09a5a;text-shadow:0 0 12px rgba(224,154,90,.5)}
 /* ---------- Tab bar ---------- */
 nav{position:fixed;left:0;right:0;bottom:0;z-index:30;background:rgba(4,6,12,.9);
   backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-top:1px solid var(--line);
@@ -218,6 +240,7 @@ nav .on{color:var(--lime);background:rgba(163,230,53,.09);box-shadow:inset 0 0 0
 <nav><div id="nav"></div></nav>
 <div id="toast"></div>
 <div id="sheetRoot"></div>
+<canvas id="confetti"></canvas>
 <script>
 /* ================= Dati (100% offline, localStorage) ================= */
 const KEY='pushup-tracker-v2', LEGACY='pushup-tracker-v1';
@@ -243,7 +266,8 @@ function loadAll(){
 let db=loadAll(), date=iso(new Date()), draft=clone(db[date]||empty()), tab='dash';
 function persist(){try{localStorage.setItem(KEY,JSON.stringify(db));return true}catch(e){toast('Spazio esaurito: esporta un backup!');return false}}
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),2200)}
-function go(t){tab=t;render();scrollTo(0,0)}
+function go(t){tab=t;render();scrollTo(0,0);
+  if(t==='rank'&&LB.on&&!LB_DATA&&!lbBusy)lbRefresh();}
 function setDate(d){if(!d)return;date=d;draft=clone(db[d]||empty());render()}
 function shift(n){const d=parse(date);d.setDate(d.getDate()+n);setDate(iso(d))}
 
@@ -330,12 +354,92 @@ function timerCard(){
   </div></div></div></div>`;
 }
 
+/* ================= Daily Goal intelligente ================= */
+const KEY_G='pushup-tracker-goal', KEY_C='pushup-tracker-celebrated';
+function goalSettings(){try{return Object.assign({mode:'auto',manual:50},
+  JSON.parse(localStorage.getItem(KEY_G)||'{}'))}catch(e){return{mode:'auto',manual:50}}}
+let GS=goalSettings(), goalEdit=false;
+function saveGS(){try{localStorage.setItem(KEY_G,JSON.stringify(GS))}catch(e){}}
+/* Auto: mediana degli ultimi 7 giorni allenati (prima del cutoff) +10%, arrotondata a multipli di 5 */
+function autoGoal(cutoff){
+  const last=trainedDays().filter(d=>d<cutoff).sort().slice(-7).map(d=>dayTot(db[d]));
+  if(!last.length)return 30;
+  const s=[...last].sort((a,b)=>a-b),med=s[Math.floor(s.length/2)];
+  return Math.max(10,Math.ceil(med*1.1/5)*5);
+}
+function currentGoal(){return GS.mode==='manual'?Math.max(1,parseInt(GS.manual)||50):autoGoal(iso(new Date()));}
+function loadCel(){try{return JSON.parse(localStorage.getItem(KEY_C)||'{}')}catch(e){return{}}}
+let CEL=loadCel();
+function maybeCelebrate(){
+  const t=iso(new Date());
+  if(dayTot(db[t]||empty())>=currentGoal()&&!CEL[t]){
+    CEL[t]=1;try{localStorage.setItem(KEY_C,JSON.stringify(CEL))}catch(e){}
+    confetti();return true;
+  }
+  return false;
+}
+function confetti(){
+  const c=document.getElementById('confetti');if(!c)return;
+  c.style.display='block';
+  const x=c.getContext('2d');c.width=innerWidth;c.height=innerHeight;
+  const cols=['#a3e635','#38bdf8','#f472b6','#f97316','#ffffff'],P=[];
+  for(let i=0;i<140;i++)P.push({x:Math.random()*c.width,y:-20-Math.random()*c.height*.5,
+    w:5+Math.random()*6,h:8+Math.random()*8,c:cols[i%cols.length],
+    vy:2+Math.random()*3,vx:-1.5+Math.random()*3,r:Math.random()*Math.PI,vr:-.1+Math.random()*.2});
+  let f=0;const id=setInterval(()=>{
+    x.clearRect(0,0,c.width,c.height);f++;
+    P.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.r+=p.vr;
+      x.save();x.translate(p.x,p.y);x.rotate(p.r);x.fillStyle=p.c;x.fillRect(-p.w/2,-p.h/2,p.w,p.h);x.restore();});
+    if(f>170){clearInterval(id);x.clearRect(0,0,c.width,c.height);c.style.display='none';}
+  },16);
+}
+function goalDots(){
+  const now=new Date();let h='';
+  for(let i=6;i>=0;i--){const d=new Date(now);d.setDate(d.getDate()-i);
+    const ds=iso(d),g=i===0?currentGoal():autoGoal(ds),t=dayTot(db[ds]||empty());
+    h+=`<span class="gdot ${t>=g?'hit':''}" title="${fmtLong(ds)}: ${t}/${g}">${t>=g?'●':'○'}</span>`;}
+  return h;
+}
+function toggleGoalEdit(){goalEdit=!goalEdit;render();}
+function setGoalMode(m){GS.mode=m;saveGS();goalEdit=m==='manual';render();maybeCelebrate();}
+function saveGoalManual(){
+  const v=parseInt((document.getElementById('g-man')||{}).value)||0;
+  if(v<1){toast('Inserisci un numero ≥ 1');return}
+  GS.manual=v;GS.mode='manual';saveGS();goalEdit=false;render();maybeCelebrate();
+  toast('Obiettivo: '+v+' flessioni 🏁');
+}
+function goalCard(){
+  const g=currentGoal(),t=dayTot(draft),pct=Math.min(100,Math.round(t/g*100)),done=t>=g;
+  let h=`<div class="card"><div class="row sp"><div>
+    <span style="font-size:13px;color:var(--mu)">🎯 Obiettivo di oggi</span>
+    <div id="g-txt" style="font-size:17px;font-weight:800"><b>${t}</b> / ${g}</div></div>
+    <button onclick="toggleGoalEdit()" aria-label="Modifica obiettivo" style="min-height:42px">✏️</button></div>
+  <div class="gbar"><i id="g-fill" style="width:${pct}%"></i></div>
+  <div class="row sp" style="margin-top:8px">
+    <span class="mu" style="font-size:12px">${GS.mode==='manual'?'Obiettivo personalizzato':'Suggerito dall\u2019app · mediana +10%'}</span>
+    ${done?'<span class="badge b-up">Completato! 🎉</span>':`<span class="mu" style="font-size:12px">${pct}%</span>`}</div>
+  <div class="gdots" title="Ultimi 7 giorni">${goalDots()}</div>`;
+  if(goalEdit){
+    h+=`<div class="gedit"><div class="seg">
+      <button class="${GS.mode==='auto'?'on':''}" onclick="setGoalMode('auto')">🤖 Auto (${autoGoal(iso(new Date()))})</button>
+      <button class="${GS.mode==='manual'?'on':''}" onclick="setGoalMode('manual')">✏️ Manuale</button></div>
+    ${GS.mode==='manual'?`<div class="row" style="margin-top:8px">
+      <input id="g-man" type="number" inputmode="numeric" min="1" max="10000" value="${GS.manual}"
+        style="flex:1;min-height:48px;text-align:center;font-weight:800;font-size:18px" aria-label="Obiettivo manuale">
+      <button class="tgo" style="min-height:48px;padding:0 18px;border:0;border-radius:12px;font-weight:900" onclick="saveGoalManual()">OK</button></div>`:''}</div>`;
+  }
+  return h+'</div>';
+}
+
 /* ================= Dashboard ================= */
 function setVal(k,i,v){draft[k][i]=Math.max(0,parseInt(v)||0);upTot()}
 function stepVal(k,i,d){draft[k][i]=Math.max(0,(parseInt(draft[k][i])||0)+d);
   const el=document.querySelector('input[data-k="'+k+'"][data-i="'+i+'"]');if(el)el.value=draft[k][i]||'';upTot()}
 function upTot(){T.forEach(t=>{const e=document.getElementById('t-'+t[0]);if(e)e.textContent=sum(draft[t[0]])});
-  const d=document.getElementById('t-day');if(d)d.textContent=dayTot(draft)}
+  const d=document.getElementById('t-day');if(d)d.textContent=dayTot(draft);
+  const gf=document.getElementById('g-fill'),gt=document.getElementById('g-txt');
+  if(gf&&gt){const g=currentGoal(),t=dayTot(draft);
+    gf.style.width=Math.min(100,t/g*100)+'%';gt.innerHTML='<b>'+t+'</b> / '+g;}}
 function addSet(k){draft[k].push(0);render();
   const i=document.querySelectorAll('[data-k="'+k+'"]');if(i.length){i[i.length-1].focus();i[i.length-1].scrollIntoView({block:'nearest',behavior:'smooth'});}}
 function delSet(k,i){draft[k].splice(i,1);render()}
@@ -357,6 +461,8 @@ function save(){
   draft=clone(c);
   if(!persist()){render();return}
   render();
+  maybeCelebrate();
+  lbPublish(); // fire-and-forget: l'offline-first non aspetta il cloud
   newsToast(detectNews(before),'Giornata salvata ✓');
 }
 function dash(){
@@ -369,6 +475,7 @@ function dash(){
   <div class="card hero"><span class="lbl">${date===today?'Flessioni oggi':'Flessioni del giorno'}</span>
     <b id="t-day">${tot}</b>
     <div class="meta"><b>${nSet}</b> serie inserite · media/giorno <b>${avgDay()}</b></div></div>`;
+  h+=goalCard();
   h+=timerCard();
   T.forEach(([k,n,en,col])=>{
     h+=`<div class="card"><div class="cat-head"><div class="cat-name">
@@ -556,6 +663,8 @@ function sheetConfirm(){
   db[date]=e;draft=clone(e);
   if(!persist())return;
   const news=detectNews(before),v=sheet.val;
+  maybeCelebrate();
+  lbPublish(); // fire-and-forget
   closeSheet(); // il render post-chiusura mostra i totali aggiornati
   newsToast(news,v+' flessioni aggiunte ✓');
 }
@@ -584,6 +693,114 @@ function sheetHTML(){
   </div></div>`;
 }
 
+/* ================= Community Rank (cloud opt-in, anonimo) =================
+   Dati personali SEMPRE in localStorage. Sul cloud (Neon) solo aggregati
+   anonimi pubblicati esplicitamente dall'utente. Offline: cache locale. */
+const LB_KEY='pushup-tracker-lb', LB_CACHE='pushup-tracker-lb-cache';
+const LB_METAS=[['day','💥 Giornata'],['week','📅 Settimana'],['total','🏆 Totale'],['streak','🔥 Streak']];
+function lbLoad(){try{return Object.assign({on:false,nick:'',uid:'',by:'day'},
+  JSON.parse(localStorage.getItem(LB_KEY)||'{}'))}catch(e){return{on:false,nick:'',uid:'',by:'day'}}}
+let LB=lbLoad(), LB_DATA=null, LB_ERR='', lbBusy=false;
+function lbSave(){try{localStorage.setItem(LB_KEY,JSON.stringify({on:LB.on,nick:LB.nick,uid:LB.uid,by:LB.by}))}catch(e){}}
+function lbUid(){
+  if(!LB.uid){const a='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';let s='';
+    const rnd=(window.crypto&&crypto.getRandomValues)?crypto.getRandomValues(new Uint8Array(16))
+      :Array.from({length:16},()=>Math.floor(Math.random()*256));
+    for(let i=0;i<16;i++)s+=a[rnd[i]%a.length];LB.uid=s;lbSave();}
+  return LB.uid;
+}
+function lbNick(){return LB.nick||('Atleta-'+lbUid().slice(0,4).toUpperCase());}
+function myAgg(){
+  const P=prs(),now=new Date();
+  return {pb:{wide:P.cats.wide.v,close:P.cats.close.v,diamond:P.cats.diamond.v,day:P.best.tot},
+    totalAll:grandTotal(),daysTrained:trainedDays().length,
+    weekTotal:sum(rng(monday(now),7)),streakCur:calcStreak()};
+}
+async function lbPublish(){
+  if(!LB.on)return false;
+  try{const a=myAgg();
+    const r=await fetch('/api/publish',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({user_id:lbUid(),nickname:lbNick(),pb:a.pb,totalAll:a.totalAll,
+        daysTrained:a.daysTrained,weekTotal:a.weekTotal,streakCur:a.streakCur})});
+    return r.ok;
+  }catch(e){return false;}
+}
+async function lbRefresh(){
+  if(lbBusy)return;lbBusy=true;LB_ERR='';render();
+  try{
+    const r=await fetch('/api/leaderboard?by='+LB.by+'&limit=10&user_id='+(LB.on?encodeURIComponent(lbUid()):''),
+      {headers:{'Accept':'application/json'}});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(j.error||('HTTP '+r.status));
+    LB_DATA=j;LB_ERR='';
+    try{localStorage.setItem(LB_CACHE,JSON.stringify({ts:Date.now(),by:LB.by,data:j}))}catch(e){}
+  }catch(e){
+    console.warn('leaderboard offline:',e);
+    try{const c=JSON.parse(localStorage.getItem(LB_CACHE)||'null');
+      if(c&&c.by===LB.by){LB_DATA=c.data;LB_ERR='Offline: classifica in cache, aggiorna quando sei online.';}
+      else{LB_DATA=null;LB_ERR=String((e&&e.message)||e);}}catch(x){LB_DATA=null;LB_ERR=String((e&&e.message)||e);}
+  }finally{lbBusy=false;render();}
+}
+function lbJoin(){
+  const inp=document.getElementById('lb-nick');
+  LB.nick=String((inp&&inp.value)||'').replace(/[<>&"']/g,'').trim().slice(0,20);
+  LB.on=true;lbUid();lbSave();
+  toast('Benvenuto nella community 🌍');
+  lbPublish().finally(lbRefresh);
+}
+function lbLeave(){
+  if(!confirm('Uscire dalla classifica? I tuoi dati restano sul telefono.'))return;
+  LB.on=false;lbSave();LB_DATA=null;render();
+}
+function lbBy(b){if(LB.by===b)return;LB.by=b;lbSave();lbRefresh();}
+function rank(){
+  let h='<h1>Sfida il <span class="glow-cyan">mondo.</span></h1>';
+  if(!LB.on){
+    return h+`<div class="card" style="text-align:center;padding:26px 18px">
+      <div style="font-size:44px">🌍</div><b style="font-size:18px">Classifica globale anonima</b>
+      <p class="mu" style="margin:8px 0 14px;font-size:14px">Confronta PB, totali e streak con la community.
+      Sul cloud solo numeri anonimi — le tue serie restano sul telefono.</p>
+      <input id="lb-nick" maxlength="20" placeholder="Nickname (es. ${esc(lbNick())})"
+        style="width:100%;min-height:52px;text-align:center;font-weight:800;font-size:17px;margin-bottom:10px" aria-label="Nickname">
+      <button class="pri" onclick="lbJoin()">🚀 Entra in classifica</button></div>
+    <div class="card"><div class="kv"><span>🔒 Anonimo</span><b>nessuna email</b></div>
+      <div class="kv"><span>📴 Offline-first</span><b>serie solo locali</b></div>
+      <div class="kv"><span>🚪 Uscita libera</span><b>in un tap</b></div></div>`;
+  }
+  h+=`<div class="card"><div class="row sp"><div>
+      <span style="font-size:13px;color:var(--mu)">🌍 Gareggi come</span>
+      <div style="font-size:18px;font-weight:900">${esc(lbNick())}</div></div>
+    <button onclick="lbRefresh()" ${lbBusy?'disabled':''} style="min-height:42px" aria-label="Aggiorna">↻</button></div>
+  <div class="row" style="margin-top:10px"><input id="lb-nick" maxlength="20" value="${esc(LB.nick)}"
+    placeholder="Nickname" style="flex:1;min-height:46px;font-weight:700" aria-label="Nickname">
+    <button style="min-height:46px" onclick="lbJoin()" aria-label="Salva nickname">💾</button></div>
+  <button class="dng" style="width:100%;margin-top:8px;min-height:42px" onclick="lbLeave()">Esci dalla classifica</button></div>`;
+  if(LB_ERR)h+=`<div class="card warn"><b>⚠️</b> ${esc(LB_ERR)}</div>`;
+  const you=LB_DATA&&LB_DATA.you;
+  if(you){
+    const cards=[['💥','PB giornata',you.day,you.me.day],['📅','Settimana',you.week,you.me.week],
+      ['🏆','Totale sempre',you.total,you.me.total],['🔥','Streak',you.streak,you.me.streak]];
+    h+=`<h2>Tu vs community · ${LB_DATA.total} atleti</h2><div class="pct-grid">`;
+    h+=cards.map(c=>`<div class="kpi"><b>${c[2].pct}%</b><small>${c[0]} ${c[1]}</small>
+      <div class="when">superi il ${c[2].pct}% · tuo: ${c[3]}</div></div>`).join('');
+    h+='</div>';
+  }
+  const meta=LB_METAS.find(m=>m[0]===LB.by);
+  h+=`<h2>Top 10 · ${meta[1]}</h2><div class="chips" style="margin-bottom:10px">`+
+    LB_METAS.map(m=>`<button class="chipbtn ${LB.by===m[0]?'on':''}" onclick="lbBy('${m[0]}')">${m[1]}</button>`).join('')+'</div>';
+  if(lbBusy&&!LB_DATA)h+='<div class="empty">Caricamento classifica… 🌍</div>';
+  else if(LB_DATA&&LB_DATA.top.length){
+    h+='<div class="card">'+LB_DATA.top.map((r,i)=>{
+      const medal=i===0?'medal1':i===1?'medal2':i===2?'medal3':'';
+      return `<div class="lb-row"><span class="lb-pos ${medal}">${i+1}</span>
+        <span class="lb-name">${esc(r.n||r.nickname||'Atleta')}</span>
+        <span class="lb-val">${r.v}</span></div>`}).join('')+'</div>';
+    if(you)h+=`<div class="card"><div class="row sp"><span>📍 La tua posizione (${meta[1]})</span><b>#${you[LB.by].rank} di ${LB_DATA.total}</b></div></div>`;
+  }
+  else if(!lbBusy)h+='<div class="empty">Nessun atleta in classifica.<br>Pubblica i tuoi numeri! 🚀</div>';
+  return h;
+}
+
 /* ================= Render ================= */
 function topbar(){
   const st=calcStreak();
@@ -591,13 +808,14 @@ function topbar(){
   <div class="streak-pill ${st?'':'off'}">🔥 ${st}</div></div>`;
 }
 function render(){
-  document.getElementById('app').innerHTML=topbar()+(tab==='dash'?dash():tab==='stats'?stats():tab==='hist'?hist():goals());
-  document.getElementById('nav').innerHTML=[['dash','🏠','Home'],['stats','📊','Stats'],['hist','📅','Storico'],['goals','🎯','Goals']]
+  document.getElementById('app').innerHTML=topbar()+(tab==='dash'?dash():tab==='stats'?stats():tab==='hist'?hist():tab==='rank'?rank():goals());
+  document.getElementById('nav').innerHTML=[['dash','🏠','Home'],['stats','📊','Stats'],['hist','📅','Storico'],['goals','🎯','Goals'],['rank','🌍','Rank']]
     .map(x=>`<button class="${tab===x[0]?'on':''}" onclick="go('${x[0]}')"><span>${x[1]}</span>${x[2]}</button>`).join('');
   document.getElementById('sheetRoot').innerHTML=sheetHTML();
 }
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&sheet.open)closeSheet();});
 render();
+setTimeout(maybeCelebrate,600); // celebra anche obiettivi già completati (es. dopo un'import)
 </script>
 </body>
 </html>

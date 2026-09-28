@@ -69,3 +69,15 @@ L'app ora mostra un **avviso arancione con la causa esatta** direttamente in Hom
 4. **Test rapido**: apri nel browser `https://TUO-APP.vercel.app/api/health` — ti dice se manca la variabile, la tabella, o quante righe ci sono (`count`).
 
 Dopo aver salvato almeno una giornata con ☁️, verifica su Neon: SQL Editor → `SELECT * FROM workouts;`
+
+## Classifica community 🌍 (v2, opt-in anonimo)
+
+I dati personali (serie, giorni, obiettivi) restano **solo in `localStorage`**. Sul cloud finiscono
+solo aggregati anonimi, e solo se l'utente entra in classifica dal tab **Rank**.
+
+- Tabella: `community_stats` (in `schema.sql` — rieseguilo nel SQL Editor di Neon per crearla)
+- `POST /api/publish` → upsert anonimo `{user_id, nickname, pb, totalAll, daysTrained, weekTotal, streakCur}`
+  (pubblicato in fire-and-forget a ogni salvataggio, senza rallentare l'app)
+- `GET /api/leaderboard?by=day|week|total|streak&user_id=...&limit=10` → top-10 + rank/percentili
+- Frontend: tab Rank con opt-in, nickname, 4 card percentile ("superi il P%"), top-10 per metrica,
+  posizione personale e cache locale quando offline

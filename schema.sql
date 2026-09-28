@@ -28,3 +28,26 @@ CREATE TRIGGER trg_workouts_touch
 -- DROP TRIGGER trg_workouts_touch ON workouts;
 -- ALTER TABLE workouts DROP CONSTRAINT workouts_pkey;
 -- ALTER TABLE workouts ADD PRIMARY KEY (user_id, workout_date);
+
+-- ============================================================
+-- Classifica community (v2: dati personali restano in localStorage,
+-- qui solo aggregati ANONIMI pubblicati su opt-in: PB, totali, streak)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS community_stats (
+  user_id      TEXT PRIMARY KEY,           -- id anonimo generato sul device
+  nickname     TEXT NOT NULL DEFAULT 'Atleta',
+  pb_wide      INT NOT NULL DEFAULT 0,     -- max rep in una serie
+  pb_close     INT NOT NULL DEFAULT 0,
+  pb_diamond   INT NOT NULL DEFAULT 0,
+  pb_day       INT NOT NULL DEFAULT 0,     -- miglior totale giornaliero
+  total_all    INT NOT NULL DEFAULT 0,     -- flessioni totali di sempre
+  days_trained INT NOT NULL DEFAULT 0,     -- giorni allenati
+  week_total   INT NOT NULL DEFAULT 0,     -- ultime 4? no: settimana corrente (lun-dom)
+  streak_cur   INT NOT NULL DEFAULT 0,     -- streak attuale
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_comm_day    ON community_stats (pb_day DESC);
+CREATE INDEX IF NOT EXISTS idx_comm_total  ON community_stats (total_all DESC);
+CREATE INDEX IF NOT EXISTS idx_comm_week   ON community_stats (week_total DESC);
+CREATE INDEX IF NOT EXISTS idx_comm_streak ON community_stats (streak_cur DESC);
