@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0f14">
+<title>Push-Up Tracker</title>
+<style>
+:root{--bg:#0b0f14;--card:#141a22;--line:#222c38;--tx:#e8edf3;--mu:#8592a3;--ac:#a3e635;--wide:#38bdf8;--close:#a3e635;--diamond:#f472b6}
+*{box-sizing:border-box;margin:0;-webkit-tap-highlight-color:transparent}
+html,body{background:var(--bg);color:var(--tx);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+#app{max-width:520px;margin:0 auto;padding:16px 16px calc(90px + env(safe-area-inset-bottom));padding-top:calc(16px + env(safe-area-inset-top))}
+h1{font-size:22px;font-weight:800;letter-spacing:-.5px;margin-bottom:14px}
+h1 span{color:var(--ac)}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:1px;color:var(--mu);margin:22px 0 10px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px}
+.row{display:flex;align-items:center;gap:8px}
+.sp{justify-content:space-between}
+button{font:inherit;color:var(--tx);background:#1d2632;border:1px solid var(--line);border-radius:10px;padding:8px 12px;cursor:pointer}
+button:active{transform:scale(.97)}
+.pri{background:var(--ac);color:#0b0f14;border:0;font-weight:800;width:100%;padding:14px;border-radius:14px;font-size:16px}
+.dng{color:#f87171}
+input{font:inherit;color:var(--tx);background:#0f151c;border:1px solid var(--line);border-radius:10px;padding:8px 10px;min-width:0}
+input:focus{outline:2px solid var(--ac);border-color:transparent}
+.datebar{display:flex;gap:8px;margin-bottom:14px}
+.datebar input{flex:1;text-align:center;color-scheme:dark}
+.dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+.tot{font-weight:800;font-size:20px}
+.ser{margin-top:8px}
+.ser label{color:var(--mu);width:56px;font-size:14px}
+.ser input{flex:1;font-size:18px;font-weight:700}
+.add{width:100%;margin-top:10px;border-style:dashed;color:var(--mu)}
+.big{text-align:center;font-size:14px;color:var(--mu)}
+.big b{display:block;font-size:40px;color:var(--tx);line-height:1.1}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.grid .card{text-align:center;padding:12px 6px;margin:0}
+.grid b{display:block;font-size:24px}
+.grid small,.mu{color:var(--mu);font-size:13px}
+.chip{display:inline-block;font-size:13px;padding:3px 9px;border-radius:99px;background:#1d2632;margin:4px 4px 0 0}
+.chart{width:100%;height:auto;display:block}
+.chart text{fill:var(--mu);font-size:9px}
+.legend{display:flex;gap:14px;justify-content:center;margin-top:8px;font-size:12px;color:var(--mu)}
+.badge{display:inline-block;padding:4px 10px;border-radius:99px;font-weight:700;font-size:14px}
+.up{background:#1a3a16;color:var(--ac)}.dn{background:#3f1d1d;color:#f87171}.eq{background:#222c38;color:var(--mu)}
+nav{position:fixed;left:0;right:0;bottom:0;background:#0f151cf2;backdrop-filter:blur(10px);border-top:1px solid var(--line);display:flex;justify-content:center;padding-bottom:env(safe-area-inset-bottom)}
+nav div{display:flex;width:100%;max-width:520px}
+nav button{flex:1;background:none;border:0;border-radius:0;padding:10px 0;color:var(--mu);font-size:12px}
+nav button span{display:block;font-size:20px}
+nav .on{color:var(--ac)}
+#toast{position:fixed;left:50%;bottom:calc(80px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ac);color:#0b0f14;font-weight:700;padding:10px 18px;border-radius:99px;opacity:0;transition:opacity .25s;pointer-events:none}
+#toast.show{opacity:1}
+.empty{text-align:center;color:var(--mu);padding:30px 10px}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<nav><div id="nav"></div></nav>
+<div id="toast"></div>
+<script>
+const KEY='pushup-tracker-v1';
+const T=[['wide','Larghe','Wide','#38bdf8'],['close','Strette','Close','#a3e635'],['diamond','Diamond','Diamond','#f472b6']];
+const pad=n=>String(n).padStart(2,'0');
+const iso=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const parse=s=>new Date(s+'T00:00:00');
+const sum=a=>a.reduce((x,y)=>x+y,0);
+const empty=()=>({wide:[],close:[],diamond:[]});
+const clone=o=>JSON.parse(JSON.stringify(o));
+const dayTot=e=>e?sum(T.map(t=>sum(e[t[0]]||[]))):0;
+const typeTot=(e,k)=>e?sum(e[k]||[]):0;
+const fmtDate=s=>parse(s).toLocaleDateString('it-IT',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
+
+function load(){try{return JSON.parse(localStorage.getItem(KEY))||{}}catch(e){return{}}}
+let db=load(), date=iso(new Date()), draft=clone(db[date]||empty()), tab='home';
+
+function persist(){try{localStorage.setItem(KEY,JSON.stringify(db));return true}catch(e){toast('Errore di salvataggio');return false}}
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1600)}
+function setDate(d){if(!d)return;date=d;draft=clone(db[d]||empty());render()}
+function shift(n){const d=parse(date);d.setDate(d.getDate()+n);setDate(iso(d))}
+function go(t){tab=t;render();scrollTo(0,0)}
+
+/* ---------- Home ---------- */
+function setVal(k,i,v){draft[k][i]=Math.max(0,parseInt(v)||0);upTot()}
+function upTot(){T.forEach(t=>{const e=document.getElementById('t-'+t[0]);if(e)e.textContent=sum(draft[t[0]])});document.getElementById('t-day').textContent=dayTot(draft)}
+function addSet(k){draft[k].push(0);render();const i=document.querySelectorAll('[data-k="'+k+'"]');i[i.length-1].focus()}
+function delSet(k,i){draft[k].splice(i,1);render()}
+function save(){
+  const c=empty();T.forEach(t=>c[t[0]]=draft[t[0]].filter(v=>v>0));
+  if(dayTot(c)===0){delete db[date]}else{db[date]=c}
+  draft=clone(c);if(persist()){toast('Giornata salvata ✓');render()}
+}
+function home(){
+  const today=iso(new Date());
+  let h=`<h1>Push-Up <span>Tracker</span></h1>
+  <div class="datebar"><button onclick="shift(-1)">‹</button><input type="date" value="${date}" max="${today}" onchange="setDate(this.value)"><button onclick="shift(1)">›</button></div>
+  <div class="card big"><b id="t-day">${dayTot(draft)}</b>flessioni ${date===today?'oggi':'in questo giorno'}</div>`;
+  T.forEach(([k,n,en,col])=>{
+    h+=`<div class="card"><div class="row sp"><div class="row"><span class="dot" style="background:${col}"></span><b>${n}</b><span class="mu">${en}</span></div><span class="tot" id="t-${k}" style="color:${col}">${sum(draft[k])}</span></div>`;
+    draft[k].forEach((v,i)=>{h+=`<div class="row ser"><label>Serie ${i+1}</label><input type="number" inputmode="numeric" min="0" data-k="${k}" value="${v||''}" placeholder="0" oninput="setVal('${k}',${i},this.value)"><button class="dng" onclick="delSet('${k}',${i})">✕</button></div>`});
+    h+=`<button class="add" onclick="addSet('${k}')">＋ Aggiungi serie</button></div>`;
+  });
+  return h+`<button class="pri" onclick="save()">💾 Salva giornata</button>`;
+}
+
+/* ---------- Storico ---------- */
+function del(d){if(confirm('Eliminare l\'allenamento del '+fmtDate(d)+'?')){delete db[d];persist();if(d===date)draft=empty();render()}}
+function edit(d){setDate(d);go('home')}
+function history(){
+  const ds=Object.keys(db).sort().reverse();
+  let h='<h1>Storico</h1>';
+  if(!ds.length)return h+'<div class="empty">Nessun allenamento registrato.<br>Inizia dalla Home 💪</div>';
+  let mon='';
+  ds.forEach(d=>{
+    const m=parse(d).toLocaleDateString('it-IT',{month:'long',year:'numeric'});
+    if(m!==mon){mon=m;h+=`<h2>${m}</h2>`}
+    const e=db[d];
+    h+=`<div class="card"><div class="row sp"><b>${fmtDate(d)}</b><span class="tot">${dayTot(e)}</span></div><div>`;
+    T.forEach(([k,n,,col])=>{if(e[k]&&e[k].length)h+=`<span class="chip" style="color:${col}">${n}: ${e[k].join(' · ')}</span>`});
+    h+=`</div><div class="row" style="margin-top:10px"><button onclick="edit('${d}')">✏️ Modifica</button><button class="dng" onclick="del('${d}')">🗑 Elimina</button></div></div>`;
+  });
+  return h;
+}
+
+/* ---------- Statistiche ---------- */
+function monday(d){const x=new Date(d);const w=(x.getDay()+6)%7;x.setDate(x.getDate()-w);x.setHours(0,0,0,0);return x}
+function rng(from,days){const p=[0,0,0];for(let i=0;i<days;i++){const d=new Date(from);d.setDate(d.getDate()+i);const e=db[iso(d)];if(e)T.forEach((t,k)=>p[k]+=typeTot(e,t[0]))}return p}
+function chart(items){
+  const W=340,H=130,max=Math.max(1,...items.map(i=>sum(i.p))),bw=W/items.length;
+  let s=`<svg class="chart" viewBox="0 0 ${W} ${H+16}">`;
+  items.forEach((it,x)=>{let y=H;it.p.forEach((v,k)=>{const hh=v/max*H;y-=hh;if(v>0)s+=`<rect x="${x*bw+bw*.15}" y="${y}" width="${bw*.7}" height="${hh}" rx="2" fill="${T[k][3]}"/>`});s+=`<text x="${x*bw+bw/2}" y="${H+12}" text-anchor="middle">${it.l}</text>`});
+  return s+'</svg><div class="legend">'+T.map(t=>`<span><span class="dot" style="background:${t[3]}"></span> ${t[1]}</span>`).join('')+'</div>';
+}
+function stats(){
+  let h='<h1>Statistiche</h1>';
+  const days=Object.keys(db).filter(d=>dayTot(db[d])>0);
+  if(!days.length)return h+'<div class="empty">Registra il tuo primo allenamento per vedere i progressi 📈</div>';
+  const now=new Date(),mon=monday(now);
+  const first=new Date(now.getFullYear(),now.getMonth(),1);
+  const today=dayTot(db[iso(now)]),week=sum(rng(mon,7)),month=sum(rng(first,31).map((v,i)=>v)) ;
+  const mTot=(()=>{let s=0;days.forEach(d=>{const x=parse(d);if(x.getFullYear()===now.getFullYear()&&x.getMonth()===now.getMonth())s+=dayTot(db[d])});return s})();
+  h+=`<div class="grid"><div class="card"><b>${today}</b><small>Oggi</small></div><div class="card"><b>${week}</b><small>Settimana</small></div><div class="card"><b>${mTot}</b><small>Mese</small></div></div>`;
+  const all=T.map(t=>sum(days.map(d=>typeTot(db[d],t[0]))));
+  const tot=sum(all),n=days.length;
+  h+=`<h2>Medie (sui giorni allenati: ${n})</h2><div class="card"><div class="row sp"><span>Totale flessioni</span><b>${tot}</b></div><div class="row sp" style="margin-top:6px"><span>Media giornaliera</span><b>${(tot/n).toFixed(1)}</b></div>`;
+  T.forEach((t,k)=>{h+=`<div class="row sp" style="margin-top:6px"><span><span class="dot" style="background:${t[3]}"></span> ${t[1]}</span><span><b>${(all[k]/n).toFixed(1)}</b> <span class="mu">/giorno · tot ${all[k]}</span></span></div>`});
+  h+='</div><h2>Ultimi 14 giorni</h2><div class="card">';
+  const it=[];for(let i=13;i>=0;i--){const d=new Date(now);d.setDate(d.getDate()-i);it.push({l:d.getDate(),p:T.map(t=>typeTot(db[iso(d)],t[0]))})}
+  h+=chart(it)+'</div><h2>Andamento settimanale</h2><div class="card">';
+  const wk=[];for(let i=7;i>=0;i--){const s=new Date(mon);s.setDate(s.getDate()-7*i);wk.push({l:s.getDate()+'/'+(s.getMonth()+1),p:rng(s,7)})}
+  h+=chart(wk);
+  const rec=sum(wk.slice(4).map(w=>sum(w.p)))/4,prev=sum(wk.slice(0,4).map(w=>sum(w.p)))/4;
+  let b;
+  if(prev===0&&rec===0)b='<span class="badge eq">Dati insufficienti</span>';
+  else if(prev===0)b='<span class="badge up">▲ In crescita</span>';
+  else{const p=(rec-prev)/prev*100;b=Math.abs(p)<3?`<span class="badge eq">● Stabile (${p.toFixed(0)}%)</span>`:p>0?`<span class="badge up">▲ +${p.toFixed(0)}%</span>`:`<span class="badge dn">▼ ${p.toFixed(0)}%</span>`}
+  return h+`<div class="row sp" style="margin-top:12px"><span class="mu">Ultime 4 settimane vs 4 precedenti</span>${b}</div></div>`;
+}
+
+/* ---------- Render ---------- */
+function render(){
+  document.getElementById('app').innerHTML=tab==='home'?home():tab==='hist'?history():stats();
+  document.getElementById('nav').innerHTML=[['home','🏠','Oggi'],['hist','📅','Storico'],['stats','📊','Statistiche']]
+    .map(x=>`<button class="${tab===x[0]?'on':''}" onclick="go('${x[0]}')"><span>${x[1]}</span>${x[2]}</button>`).join('');
+}
+render();
+</script>
+</body>
+</html>

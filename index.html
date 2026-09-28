@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0f14">
+<meta name="description" content="Push-Up Tracker: registra serie Larghe, Strette e Diamond e segui i progressi.">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Push-Up">
+<meta name="color-scheme" content="dark">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<title>Push-Up Tracker</title>
+<style>
+:root{
+  --bg:#0b0f14;--card:#141a22;--line:#222c38;--tx:#e8edf3;--mu:#8592a3;--ac:#a3e635;
+  --wide:#38bdf8;--close:#a3e635;--diamond:#f472b6;
+  --nav-h:62px;--r:16px;
+  --sat:env(safe-area-inset-top,0px);--sab:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box;margin:0;-webkit-tap-highlight-color:transparent}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+html,body{background:var(--bg);color:var(--tx);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+body{touch-action:manipulation;min-height:100dvh}
+#app{max-width:560px;margin:0 auto;padding:12px 14px calc(var(--nav-h) + var(--sab) + 96px)}
+/* Sticky header: titolo + data sempre raggiungibili con il pollice */
+.top{position:sticky;top:0;z-index:20;margin:-12px -14px 14px;padding:calc(10px + var(--sat)) 14px 10px;
+  background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--line)}
+.top h1{margin-bottom:8px}
+h1{font-size:clamp(20px,5.5vw,24px);font-weight:800;letter-spacing:-.5px}
+h1 span{color:var(--ac)}
+h2{font-size:12px;text-transform:uppercase;letter-spacing:1px;color:var(--mu);margin:22px 0 10px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin-bottom:12px}
+.row{display:flex;align-items:center;gap:8px}
+.sp{justify-content:space-between}
+button{font:inherit;color:var(--tx);background:#1d2632;border:1px solid var(--line);border-radius:12px;
+  padding:8px 12px;min-height:44px;cursor:pointer;user-select:none;-webkit-user-select:none}
+button:active{transform:scale(.96)}
+button:disabled{opacity:.5;cursor:wait}
+button:focus-visible,input:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+.pri{background:var(--ac);color:#0b0f14;border:0;font-weight:800;width:100%;min-height:56px;
+  border-radius:14px;font-size:17px;box-shadow:0 8px 24px rgba(163,230,53,.22)}
+.dng{color:#f87171}
+input{font:inherit;color:var(--tx);background:#0f151c;border:1px solid var(--line);border-radius:12px;
+  padding:8px 10px;min-width:0;font-size:16px /* ≥16px: niente auto-zoom su iOS */}
+input:focus{outline:2px solid var(--ac);border-color:transparent}
+input[type=number]{-moz-appearance:textfield;appearance:textfield}
+input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.datebar{display:flex;gap:8px}
+.datebar button{width:54px;flex:none;min-height:50px;font-size:22px;line-height:1}
+.datebar input{flex:1;text-align:center;color-scheme:dark;min-height:50px;font-weight:600}
+.dot{width:10px;height:10px;border-radius:50%;display:inline-block;flex:none}
+.tot{font-weight:800;font-size:20px;font-variant-numeric:tabular-nums}
+/* Righe serie: stepper grandi pensati per dita sudate */
+.ser{margin-top:10px}
+.ser label{color:var(--mu);width:34px;flex:none;font-size:13px;font-weight:700;text-align:center}
+.ser input{flex:1;min-height:54px;font-size:20px;font-weight:700;text-align:center;font-variant-numeric:tabular-nums}
+.step{width:50px;flex:none;min-height:54px;font-size:24px;font-weight:800;line-height:1;padding:0}
+.iconbtn{width:44px;flex:none;min-height:54px;padding:0}
+.add{width:100%;margin-top:10px;border-style:dashed;color:var(--mu);min-height:48px}
+/* Pulsante salva sempre visibile sopra la nav */
+.savebar{position:sticky;bottom:calc(var(--nav-h) + var(--sab) + 12px);z-index:15;margin-top:16px}
+/* Riepilogo */
+.big{text-align:center;font-size:14px;color:var(--mu)}
+.big b{display:block;font-size:clamp(38px,12vw,50px);color:var(--tx);line-height:1.1;font-variant-numeric:tabular-nums}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.grid .card{text-align:center;padding:12px 6px;margin:0}
+.grid b{display:block;font-size:clamp(19px,6vw,24px);font-variant-numeric:tabular-nums}
+.grid small,.mu{color:var(--mu);font-size:13px}
+.chip{display:inline-block;font-size:13px;padding:5px 10px;border-radius:99px;background:#1d2632;margin:4px 4px 0 0}
+.histbtn{flex:1;min-height:46px}
+.chart{width:100%;height:auto;display:block}
+.chart text{fill:var(--mu);font-size:9px}
+.legend{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-top:8px;font-size:12px;color:var(--mu)}
+.badge{display:inline-block;padding:4px 10px;border-radius:99px;font-weight:700;font-size:14px}
+.up{background:#1a3a16;color:var(--ac)}.dn{background:#3f1d1d;color:#f87171}.eq{background:#222c38;color:var(--mu)}
+#sync{font-size:12px;color:var(--mu);text-align:center}
+#sync .dot{margin-right:6px}
+.top #sync{margin-top:2px}
+nav{position:fixed;left:0;right:0;bottom:0;z-index:30;background:#0f151cf2;backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);border-top:1px solid var(--line);display:flex;justify-content:center;
+  padding-bottom:var(--sab)}
+nav div{display:flex;width:100%;max-width:560px}
+nav button{flex:1;background:none;border:0;border-radius:0;min-height:var(--nav-h);padding:8px 0;color:var(--mu);font-size:11px;font-weight:600}
+nav button span{display:block;font-size:22px;line-height:1.2}
+nav .on{color:var(--ac)}
+#toast{position:fixed;left:50%;bottom:calc(var(--nav-h) + var(--sab) + 84px);transform:translateX(-50%);
+  background:var(--ac);color:#0b0f14;font-weight:700;padding:12px 20px;border-radius:99px;opacity:0;
+  transition:opacity .25s;pointer-events:none;max-width:92vw;text-align:center;z-index:40}
+#toast.show{opacity:1}
+.empty{text-align:center;color:var(--mu);padding:30px 10px}
+/* Telefoni molto piccoli */
+@media (max-width:340px){
+  #app{padding-left:10px;padding-right:10px}
+  .step{width:44px}
+  .ser label{display:none}
+  .grid{gap:8px}
+}
+/* Schermi più larghi: respiro in più */
+@media (min-width:480px){
+  #app{padding-left:20px;padding-right:20px}
+  .top{margin-left:-20px;margin-right:-20px;padding-left:20px;padding-right:20px}
+  .card{padding:16px}
+}
+@media (prefers-reduced-motion:reduce){
+  *{scroll-behavior:auto!important;transition:none!important}
+  button:active{transform:none}
+}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<nav><div id="nav"></div></nav>
+<div id="toast"></div>
+<script>
+const KEY='pushup-tracker-v1';
+const T=[['wide','Larghe','Wide','#38bdf8'],['close','Strette','Close','#a3e635'],['diamond','Diamond','Diamond','#f472b6']];
+const pad=n=>String(n).padStart(2,'0');
+const iso=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const parse=s=>new Date(s+'T00:00:00');
+const sum=a=>a.reduce((x,y)=>x+y,0);
+const empty=()=>({wide:[],close:[],diamond:[]});
+const clone=o=>JSON.parse(JSON.stringify(o));
+const dayTot=e=>e?sum(T.map(t=>sum(e[t[0]]||[]))):0;
+const typeTot=(e,k)=>e?sum(e[k]||[]):0;
+const fmtDate=s=>parse(s).toLocaleDateString('it-IT',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
+
+/* ---------- Stato: cache locale + sync Neon via /api/workouts ---------- */
+function loadCache(){try{return JSON.parse(localStorage.getItem(KEY))||{}}catch(e){return{}}}
+let db=loadCache(), date=iso(new Date()), draft=clone(db[date]||empty()), tab='home';
+let cloud=true, loading=true, saving=false;
+
+function saveCache(){try{localStorage.setItem(KEY,JSON.stringify(db))}catch(e){}}
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),1800)}
+
+function setSync(state){
+  cloud=(state==='cloud');
+  const el=document.getElementById('sync');
+  if(!el)return;
+  if(state==='loading'){el.innerHTML='<span class="dot" style="background:#8592a3"></span>Sincronizzazione…';}
+  else if(state==='cloud'){el.innerHTML='<span class="dot" style="background:#a3e635"></span>Connesso a Neon ☁️';}
+  else{el.innerHTML='<span class="dot" style="background:#f59e0b"></span>Offline — uso dati locali';}
+}
+
+async function refresh(){
+  loading=true;render();setSync('loading');
+  try{
+    const r=await fetch('/api/workouts',{headers:{'Accept':'application/json'}});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    db=await r.json();
+    saveCache();
+    draft=clone(db[date]||empty());
+    setSync('cloud');
+  }catch(e){
+    console.warn('API non raggiungibile, uso cache locale:',e);
+    db=loadCache();
+    draft=clone(db[date]||empty());
+    setSync('offline');
+  }finally{loading=false;render();setSync(cloud?'cloud':'offline');}
+}
+
+async function save(){
+  if(saving)return;
+  const c=empty();T.forEach(t=>c[t[0]]=draft[t[0]].filter(v=>v>0));
+  saving=true;render();
+  try{
+    const r=await fetch('/api/workouts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date,entry:c})});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(j.error||('HTTP '+r.status));
+    if(dayTot(c)===0){delete db[date]}else{db[date]=c}
+    draft=clone(c);saveCache();setSync('cloud');
+    toast('Giornata salvata ✓');
+  }catch(e){
+    console.warn('Salvataggio cloud fallito, salvo locale:',e);
+    if(dayTot(c)===0){delete db[date]}else{db[date]=c}
+    draft=clone(c);saveCache();setSync('offline');
+    toast('Salvato in locale (offline)');
+  }finally{saving=false;render();setSync(cloud?'cloud':'offline');}
+}
+
+async function del(d){
+  if(!confirm('Eliminare l\'allenamento del '+fmtDate(d)+'?'))return;
+  try{
+    const r=await fetch('/api/workouts?date='+encodeURIComponent(d),{method:'DELETE'});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    setSync('cloud');
+  }catch(e){
+    console.warn('Delete cloud fallita, procedo locale:',e);
+    setSync('offline');
+  }
+  delete db[d];saveCache();
+  if(d===date)draft=empty();
+  render();setSync(cloud?'cloud':'offline');
+}
+
+function setDate(d){if(!d)return;date=d;draft=clone(db[d]||empty());render()}
+function shift(n){const d=parse(date);d.setDate(d.getDate()+n);setDate(iso(d))}
+function go(t){tab=t;render();scrollTo(0,0)}
+
+/* ---------- Home ---------- */
+function setVal(k,i,v){draft[k][i]=Math.max(0,parseInt(v)||0);upTot()}
+function upTot(){T.forEach(t=>{const e=document.getElementById('t-'+t[0]);if(e)e.textContent=sum(draft[t[0]])});const d=document.getElementById('t-day');if(d)d.textContent=dayTot(draft)}
+function addSet(k){draft[k].push(0);render();const i=document.querySelectorAll('[data-k="'+k+'"]');if(i.length)i[i.length-1].focus()}
+function delSet(k,i){draft[k].splice(i,1);render()}
+function edit(d){setDate(d);go('home')}
+
+function home(){
+  const today=iso(new Date());
+  let h=`<h1>Push-Up <span>Tracker</span></h1><div id="sync"></div>
+  <div class="datebar"><button onclick="shift(-1)">‹</button><input type="date" value="${date}" max="${today}" onchange="setDate(this.value)"><button onclick="shift(1)">›</button></div>
+  <div class="card big"><b id="t-day">${dayTot(draft)}</b>flessioni ${date===today?'oggi':'in questo giorno'}</div>`;
+  T.forEach(([k,n,en,col])=>{
+    h+=`<div class="card"><div class="row sp"><div class="row"><span class="dot" style="background:${col}"></span><b>${n}</b><span class="mu">${en}</span></div><span class="tot" id="t-${k}" style="color:${col}">${sum(draft[k])}</span></div>`;
+    draft[k].forEach((v,i)=>{h+=`<div class="row ser"><label>Serie ${i+1}</label><input type="number" inputmode="numeric" min="0" data-k="${k}" value="${v||''}" placeholder="0" oninput="setVal('${k}',${i},this.value)"><button class="dng" onclick="delSet('${k}',${i})">✕</button></div>`});
+    h+=`<button class="add" onclick="addSet('${k}')">＋ Aggiungi serie</button></div>`;
+  });
+  h+=`<button class="pri" onclick="save()" ${saving||loading?'disabled':''}>${saving?'⏳ Salvataggio…':'💾 Salva giornata'}</button>`;
+  return h;
+}
+
+/* ---------- Storico ---------- */
+function history(){
+  const ds=Object.keys(db).sort().reverse();
+  let h='<h1>Storico</h1><div id="sync" style="display:none"></div>';
+  if(loading)return h+'<div class="empty">Caricamento… ☁️</div>';
+  if(!ds.length)return h+'<div class="empty">Nessun allenamento registrato.<br>Inizia dalla Home 💪</div>';
+  let mon='';
+  ds.forEach(d=>{
+    const m=parse(d).toLocaleDateString('it-IT',{month:'long',year:'numeric'});
+    if(m!==mon){mon=m;h+=`<h2>${m}</h2>`}
+    const e=db[d];
+    h+=`<div class="card"><div class="row sp"><b>${fmtDate(d)}</b><span class="tot">${dayTot(e)}</span></div><div>`;
+    T.forEach(([k,n,,col])=>{if(e[k]&&e[k].length)h+=`<span class="chip" style="color:${col}">${n}: ${e[k].join(' · ')}</span>`});
+    h+=`</div><div class="row" style="margin-top:10px"><button onclick="edit('${d}')">✏️ Modifica</button><button class="dng" onclick="del('${d}')">🗑 Elimina</button></div></div>`;
+  });
+  return h;
+}
+
+/* ---------- Statistiche ---------- */
+function monday(d){const x=new Date(d);const w=(x.getDay()+6)%7;x.setDate(x.getDate()-w);x.setHours(0,0,0,0);return x}
+function rng(from,days){const p=[0,0,0];for(let i=0;i<days;i++){const d=new Date(from);d.setDate(d.getDate()+i);const e=db[iso(d)];if(e)T.forEach((t,k)=>p[k]+=typeTot(e,t[0]))}return p}
+function chart(items){
+  const W=340,H=130,max=Math.max(1,...items.map(i=>sum(i.p))),bw=W/items.length;
+  let s=`<svg class="chart" viewBox="0 0 ${W} ${H+16}">`;
+  items.forEach((it,x)=>{let y=H;it.p.forEach((v,k)=>{const hh=v/max*H;y-=hh;if(v>0)s+=`<rect x="${x*bw+bw*.15}" y="${y}" width="${bw*.7}" height="${hh}" rx="2" fill="${T[k][3]}"/>`});s+=`<text x="${x*bw+bw/2}" y="${H+12}" text-anchor="middle">${it.l}</text>`});
+  return s+'</svg><div class="legend">'+T.map(t=>`<span><span class="dot" style="background:${t[3]}"></span> ${t[1]}</span>`).join('')+'</div>';
+}
+function stats(){
+  let h='<h1>Statistiche</h1><div id="sync" style="display:none"></div>';
+  const days=Object.keys(db).filter(d=>dayTot(db[d])>0);
+  if(loading)return h+'<div class="empty">Caricamento… ☁️</div>';
+  if(!days.length)return h+'<div class="empty">Registra il tuo primo allenamento per vedere i progressi 📈</div>';
+  const now=new Date(),mon=monday(now);
+  const today=dayTot(db[iso(now)]),week=sum(rng(mon,7));
+  const mTot=(()=>{let s=0;days.forEach(d=>{const x=parse(d);if(x.getFullYear()===now.getFullYear()&&x.getMonth()===now.getMonth())s+=dayTot(db[d])});return s})();
+  h+=`<div class="grid"><div class="card"><b>${today}</b><small>Oggi</small></div><div class="card"><b>${week}</b><small>Settimana</small></div><div class="card"><b>${mTot}</b><small>Mese</small></div></div>`;
+  const all=T.map(t=>sum(days.map(d=>typeTot(db[d],t[0]))));
+  const tot=sum(all),n=days.length;
+  h+=`<h2>Medie (sui giorni allenati: ${n})</h2><div class="card"><div class="row sp"><span>Totale flessioni</span><b>${tot}</b></div><div class="row sp" style="margin-top:6px"><span>Media giornaliera</span><b>${(tot/n).toFixed(1)}</b></div>`;
+  T.forEach((t,k)=>{h+=`<div class="row sp" style="margin-top:6px"><span><span class="dot" style="background:${t[3]}"></span> ${t[1]}</span><span><b>${(all[k]/n).toFixed(1)}</b> <span class="mu">/giorno · tot ${all[k]}</span></span></div>`});
+  h+='</div><h2>Ultimi 14 giorni</h2><div class="card">';
+  const it=[];for(let i=13;i>=0;i--){const d=new Date(now);d.setDate(d.getDate()-i);it.push({l:d.getDate(),p:T.map(t=>typeTot(db[iso(d)],t[0]))})}
+  h+=chart(it)+'</div><h2>Andamento settimanale</h2><div class="card">';
+  const wk=[];for(let i=7;i>=0;i--){const s=new Date(mon);s.setDate(s.getDate()-7*i);wk.push({l:s.getDate()+'/'+(s.getMonth()+1),p:rng(s,7)})}
+  h+=chart(wk);
+  const rec=sum(wk.slice(4).map(w=>sum(w.p)))/4,prev=sum(wk.slice(0,4).map(w=>sum(w.p)))/4;
+  let b;
+  if(prev===0&&rec===0)b='<span class="badge eq">Dati insufficienti</span>';
+  else if(prev===0)b='<span class="badge up">▲ In crescita</span>';
+  else{const p=(rec-prev)/prev*100;b=Math.abs(p)<3?`<span class="badge eq">● Stabile (${p.toFixed(0)}%)</span>`:p>0?`<span class="badge up">▲ +${p.toFixed(0)}%</span>`:`<span class="badge dn">▼ ${p.toFixed(0)}%</span>`}
+  return h+`<div class="row sp" style="margin-top:12px"><span class="mu">Ultime 4 settimane vs 4 precedenti</span>${b}</div></div>`;
+}
+
+/* ---------- Render ---------- */
+function render(){
+  document.getElementById('app').innerHTML=tab==='home'?home():tab==='hist'?history():stats();
+  document.getElementById('nav').innerHTML=[['home','🏠','Oggi'],['hist','📅','Storico'],['stats','📊','Statistiche']]
+    .map(x=>`<button class="${tab===x[0]?'on':''}" onclick="go('${x[0]}')"><span>${x[1]}</span>${x[2]}</button>`).join('');
+  const s=document.getElementById('sync');
+  if(s&&tab==='home'){
+    if(loading)s.innerHTML='<span class="dot" style="background:#8592a3"></span>Sincronizzazione…';
+    else if(cloud)s.innerHTML='<span class="dot" style="background:#a3e635"></span>Connesso a Neon ☁️';
+    else s.innerHTML='<span class="dot" style="background:#f59e0b"></span>Offline — uso dati locali';
+  }
+}
+render();
+refresh();
+</script>
+</body>
+</html>
