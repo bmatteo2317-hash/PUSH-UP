@@ -156,6 +156,34 @@ input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-
   box-shadow:0 0 10px rgba(163,230,53,.5);transition:width .5s}
 .gprog{font-size:11px;color:var(--mu);margin-top:4px;font-variant-numeric:tabular-nums}
 .gdone{color:var(--lime);font-size:12px;font-weight:800}
+/* ---------- Bottom sheet inserimento rapido ---------- */
+.sheet-wrap{position:fixed;inset:0;z-index:50;visibility:hidden;transition:visibility 0s .32s}
+.sheet-wrap.open{visibility:visible;transition:none}
+.sheet-wrap .backdrop{position:absolute;inset:0;background:rgba(0,0,0,.62);opacity:0;transition:opacity .25s}
+.sheet-wrap.open .backdrop{opacity:1}
+.sheet{position:absolute;left:0;right:0;bottom:0;max-width:560px;margin:0 auto;background:#0b111c;
+  border:1px solid var(--line);border-bottom:0;border-radius:24px 24px 0 0;
+  padding:10px 18px calc(18px + var(--sab));transform:translateY(106%);
+  transition:transform .32s cubic-bezier(.32,.72,.35,1);box-shadow:0 -20px 60px rgba(0,0,0,.65);
+  max-height:92dvh;overflow-y:auto}
+.sheet-wrap.open .sheet{transform:none}
+.grab{width:44px;height:5px;border-radius:99px;background:rgba(255,255,255,.22);margin:2px auto 10px}
+.sheet .x{position:absolute;top:12px;right:12px;width:42px;min-height:42px;border-radius:50%;font-size:15px}
+.sh-cat{display:flex;align-items:center;justify-content:center;gap:8px;font-weight:800;font-size:15px}
+.sh-counter{text-align:center;font-size:clamp(72px,22vw,96px);font-weight:900;line-height:1.15;
+  font-variant-numeric:tabular-nums;margin:4px 0 0}
+.sh-counter.pulse{animation:shpulse .18s}
+@keyframes shpulse{40%{transform:scale(1.12)}}
+.sh-hint{text-align:center;color:var(--mu);font-size:12px;margin-bottom:12px}
+.quick{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:8px}
+.quick button{min-height:54px;font-weight:900;font-size:15px;background:rgba(163,230,53,.09);
+  border-color:rgba(163,230,53,.35)}
+.qcorr{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.qcorr button{min-height:48px}
+.qminus{color:#f87171!important}
+.sh-manual{width:100%;min-height:56px;text-align:center;font-size:20px;font-weight:800;
+  font-variant-numeric:tabular-nums;margin-bottom:12px}
+.qadd{width:100%;margin:10px 0 2px;min-height:52px;font-weight:800;font-size:15px}
 /* ---------- Tab bar ---------- */
 nav{position:fixed;left:0;right:0;bottom:0;z-index:30;background:rgba(4,6,12,.9);
   backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-top:1px solid var(--line);
@@ -189,6 +217,7 @@ nav .on{color:var(--lime);background:rgba(163,230,53,.09);box-shadow:inset 0 0 0
 <div id="app"></div>
 <nav><div id="nav"></div></nav>
 <div id="toast"></div>
+<div id="sheetRoot"></div>
 <script>
 /* ================= Dati (100% offline, localStorage) ================= */
 const KEY='pushup-tracker-v2', LEGACY='pushup-tracker-v1';
@@ -310,19 +339,25 @@ function upTot(){T.forEach(t=>{const e=document.getElementById('t-'+t[0]);if(e)e
 function addSet(k){draft[k].push(0);render();
   const i=document.querySelectorAll('[data-k="'+k+'"]');if(i.length){i[i.length-1].focus();i[i.length-1].scrollIntoView({block:'nearest',behavior:'smooth'});}}
 function delSet(k,i){draft[k].splice(i,1);render()}
+function detectNews(before){
+  const after=prs(),news=[];
+  T.forEach(([k,n])=>{const b=JSON.parse(before.pr).cats[k].v;
+    if(after.cats[k].v>b&&after.cats[k].v>0)news.push('🏆 Record '+n+': '+after.cats[k].v+'!');});
+  const nb=unlockedIds().filter(id=>before.ach.split(',').indexOf(id)<0);
+  nb.forEach(id=>{const a=ACH.find(x=>x.id===id);if(a)news.push('🎖️ '+a.name+' sbloccato!');});
+  return news;
+}
+function newsToast(news,fallback){
+  toast(news.length?news.slice(0,2).join('  ·  ')+(news.length>2?'  (+'+(news.length-2)+' in Obiettivi)':''):fallback);
+}
 function save(){
   const before={pr:JSON.stringify(prs()),ach:unlockedIds().join(',')};
   const c=empty();T.forEach(t=>c[t[0]]=draft[t[0]].filter(v=>v>0));
   if(dayTot(c)===0){delete db[date]}else{db[date]=c}
   draft=clone(c);
   if(!persist()){render();return}
-  const after=prs(),news=[];
-  T.forEach(([k,n])=>{const b=JSON.parse(before.pr).cats[k].v;
-    if(after.cats[k].v>b&&after.cats[k].v>0)news.push('🏆 Record '+n+': '+after.cats[k].v+'!');});
-  const nb=unlockedIds().filter(id=>before.ach.split(',').indexOf(id)<0);
-  nb.forEach(id=>{const a=ACH.find(x=>x.id===id);if(a)news.push('🎖️ '+a.name+' sbloccato!');});
   render();
-  toast(news.length?news.slice(0,2).join('  ·  ')+(news.length>2?'  (+'+(news.length-2)+' in Obiettivi)':''):'Giornata salvata ✓');
+  newsToast(detectNews(before),'Giornata salvata ✓');
 }
 function dash(){
   const today=iso(new Date()),tot=dayTot(draft);
@@ -338,7 +373,8 @@ function dash(){
   T.forEach(([k,n,en,col])=>{
     h+=`<div class="card"><div class="cat-head"><div class="cat-name">
       <span class="dot" style="background:${col};color:${col}"></span>${n} <small>${en}</small></div>
-      <span class="tot" id="t-${k}" style="color:${col}">${sum(draft[k])}</span></div>`;
+      <span class="tot" id="t-${k}" style="color:${col}">${sum(draft[k])}</span></div>
+    <button class="qadd" style="border-color:${col}66;color:${col}" onclick="openSheet('${k}')">⚡ Serie rapida</button>`;
     draft[k].forEach((v,i)=>{h+=`<div class="row ser"><label>S${i+1}</label>
       <button class="step" onclick="stepVal('${k}',${i},-1)" aria-label="Riduci">−</button>
       <input type="number" inputmode="numeric" min="0" data-k="${k}" data-i="${i}" value="${v||''}"
@@ -483,6 +519,71 @@ function goals(){
   return h+'</div>';
 }
 
+/* ================= Bottom sheet inserimento rapido ================= */
+let sheet={open:false,cat:null,val:0,touchY:null};
+const catOf=k=>T.find(t=>t[0]===k);
+function openSheet(k){
+  sheet={open:true,cat:k,val:0,touchY:null};
+  document.body.style.overflow='hidden';render();
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    const w=document.getElementById('sheetWrap');if(w)w.classList.add('open');}));
+}
+function closeSheet(){
+  const w=document.getElementById('sheetWrap');if(w)w.classList.remove('open');
+  document.body.style.overflow='';
+  setTimeout(()=>{sheet.open=false;render();},280);
+}
+function bump(n){
+  sheet.val=Math.max(0,Math.min(10000,sheet.val+n));
+  if(navigator.vibrate)try{navigator.vibrate(8)}catch(e){}
+  const c=document.getElementById('sh-val');
+  if(c){c.textContent=sheet.val;c.classList.remove('pulse');void c.offsetWidth;c.classList.add('pulse');}
+  const m=document.getElementById('sh-man');
+  if(m&&document.activeElement!==m)m.value=sheet.val||'';
+  const b=document.getElementById('sh-ok');if(b)b.disabled=sheet.val<=0;
+}
+function sheetReset(){sheet.val=0;updSheet();}
+function sheetType(v){sheet.val=Math.max(0,Math.min(10000,parseInt(v)||0));updSheet();}
+function updSheet(){
+  const c=document.getElementById('sh-val');if(c)c.textContent=sheet.val;
+  const b=document.getElementById('sh-ok');if(b)b.disabled=sheet.val<=0;
+}
+function sheetConfirm(){
+  if(sheet.val<=0||!sheet.cat)return;
+  const before={pr:JSON.stringify(prs()),ach:unlockedIds().join(',')};
+  const e=db[date]||empty();
+  e[sheet.cat]=[...(e[sheet.cat]||[]),sheet.val];
+  db[date]=e;draft=clone(e);
+  if(!persist())return;
+  const news=detectNews(before),v=sheet.val;
+  closeSheet(); // il render post-chiusura mostra i totali aggiornati
+  newsToast(news,v+' flessioni aggiunte ✓');
+}
+function shT(e){sheet.touchY=e.touches[0].clientY;}
+function shE(e){if(sheet.touchY==null)return;
+  const dy=e.changedTouches[0].clientY-sheet.touchY;sheet.touchY=null;
+  if(dy>90)closeSheet();}
+function sheetHTML(){
+  if(!sheet.open)return '';
+  const [k,nm,en,col]=catOf(sheet.cat);
+  return `<div class="sheet-wrap" id="sheetWrap"><div class="backdrop" onclick="closeSheet()"></div>
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="Aggiungi serie ${nm}"
+    ontouchstart="shT(event)" ontouchend="shE(event)">
+    <div class="grab"></div>
+    <button class="x" onclick="closeSheet()" aria-label="Annulla">✕</button>
+    <div class="sh-cat"><span class="dot" style="background:${col};color:${col}"></span>${nm}
+      <span class="mu">${en}</span></div>
+    <div class="sh-counter" id="sh-val" style="color:${col};text-shadow:0 0 30px ${col}66">0</div>
+    <div class="sh-hint">serie in composizione · oggi sei a <b style="color:var(--tx)">${dayTot(db[date])}</b></div>
+    <div class="quick">${[5,10,20,50,100].map(n=>`<button onclick="bump(${n})" aria-label="Aggiungi ${n}">+${n}</button>`).join('')}</div>
+    <div class="qcorr"><button class="qminus" onclick="bump(-5)">−5</button>
+      <button onclick="sheetReset()">↺ Reset</button></div>
+    <input class="sh-manual" id="sh-man" type="number" inputmode="numeric" min="0" max="10000"
+      placeholder="o digita il numero…" oninput="sheetType(this.value)" aria-label="Valore manuale">
+    <button class="pri" id="sh-ok" onclick="sheetConfirm()" disabled>✔ Conferma serie</button>
+  </div></div>`;
+}
+
 /* ================= Render ================= */
 function topbar(){
   const st=calcStreak();
@@ -493,7 +594,9 @@ function render(){
   document.getElementById('app').innerHTML=topbar()+(tab==='dash'?dash():tab==='stats'?stats():tab==='hist'?hist():goals());
   document.getElementById('nav').innerHTML=[['dash','🏠','Home'],['stats','📊','Stats'],['hist','📅','Storico'],['goals','🎯','Goals']]
     .map(x=>`<button class="${tab===x[0]?'on':''}" onclick="go('${x[0]}')"><span>${x[1]}</span>${x[2]}</button>`).join('');
+  document.getElementById('sheetRoot').innerHTML=sheetHTML();
 }
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&sheet.open)closeSheet();});
 render();
 </script>
 </body>
