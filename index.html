@@ -92,6 +92,8 @@ nav .on{color:var(--ac)}
   background:var(--ac);color:#0b0f14;font-weight:700;padding:12px 20px;border-radius:99px;opacity:0;
   transition:opacity .25s;pointer-events:none;max-width:92vw;text-align:center;z-index:40}
 #toast.show{opacity:1}
+.warn{border-color:#f59e0b;background:#221a08;font-size:14px;overflow-wrap:anywhere}
+.warn b{color:#fbbf24}
 .empty{text-align:center;color:var(--mu);padding:30px 10px}
 /* Telefoni molto piccoli */
 @media (max-width:340px){
@@ -132,7 +134,8 @@ const fmtDate=s=>parse(s).toLocaleDateString('it-IT',{weekday:'short',day:'numer
 /* ---------- Stato: cache locale + sync Neon via /api/workouts ---------- */
 function loadCache(){try{return JSON.parse(localStorage.getItem(KEY))||{}}catch(e){return{}}}
 let db=loadCache(), date=iso(new Date()), draft=clone(db[date]||empty()), tab='home';
-let cloud=true, loading=true, saving=false;
+let cloud=true, loading=true, saving=false, diag='';
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
 function saveCache(){try{localStorage.setItem(KEY,JSON.stringify(db))}catch(e){}}
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),1800)}
@@ -146,19 +149,32 @@ function setSync(state){
   else{el.innerHTML='<span class="dot" style="background:#f59e0b"></span>Offline — uso dati locali';}
 }
 
+async function diagnose(){
+  try{
+    const hr=await fetch('/api/health',{headers:{'Accept':'application/json'}});
+    const hj=await hr.json();
+    diag=(!hj.ok&&hj.error)?hj.error:'';
+  }catch(e){
+    diag='API non raggiungibile. Apri l\u2019app dall\u2019URL di Vercel (non come file locale) oppure avvia `vercel dev`.';
+  }
+  return diag;
+}
+
 async function refresh(){
   loading=true;render();setSync('loading');
   try{
     const r=await fetch('/api/workouts',{headers:{'Accept':'application/json'}});
-    if(!r.ok)throw new Error('HTTP '+r.status);
+    if(!r.ok){const j=await r.json().catch(()=>({}));throw new Error(j.error||('HTTP '+r.status));}
     db=await r.json();
     saveCache();
     draft=clone(db[date]||empty());
+    diag='';
     setSync('cloud');
   }catch(e){
     console.warn('API non raggiungibile, uso cache locale:',e);
     db=loadCache();
     draft=clone(db[date]||empty());
+    await diagnose();
     setSync('offline');
   }finally{loading=false;render();setSync(cloud?'cloud':'offline');}
 }
@@ -173,12 +189,15 @@ async function save(){
     if(!r.ok)throw new Error(j.error||('HTTP '+r.status));
     if(dayTot(c)===0){delete db[date]}else{db[date]=c}
     draft=clone(c);saveCache();setSync('cloud');
+    diag='';
     toast('Giornata salvata ✓');
   }catch(e){
     console.warn('Salvataggio cloud fallito, salvo locale:',e);
     if(dayTot(c)===0){delete db[date]}else{db[date]=c}
     draft=clone(c);saveCache();setSync('offline');
-    toast('Salvato in locale (offline)');
+    await diagnose();
+    const msg=(e&&e.message)||'';
+    toast(msg.indexOf('Errore database')===0||msg.indexOf('Campo')===0||msg.indexOf('Le serie')===0?msg:(diag||'Salvato in locale (offline)'));
   }finally{saving=false;render();setSync(cloud?'cloud':'offline');}
 }
 
@@ -203,6 +222,7 @@ function go(t){tab=t;render();scrollTo(0,0)}
 
 /* ---------- Home ---------- */
 function setVal(k,i,v){draft[k][i]=Math.max(0,parseInt(v)||0);upTot()}
+function stepVal(k,i,d){draft[k][i]=Math.max(0,(parseInt(draft[k][i])||0)+d);const el=document.querySelector(`input[data-k="${k}"][data-i="${i}"]`);if(el)el.value=draft[k][i]||'';upTot()}
 function upTot(){T.forEach(t=>{const e=document.getElementById('t-'+t[0]);if(e)e.textContent=sum(draft[t[0]])});const d=document.getElementById('t-day');if(d)d.textContent=dayTot(draft)}
 function addSet(k){draft[k].push(0);render();const i=document.querySelectorAll('[data-k="'+k+'"]');if(i.length)i[i.length-1].focus()}
 function delSet(k,i){draft[k].splice(i,1);render()}
@@ -210,15 +230,17 @@ function edit(d){setDate(d);go('home')}
 
 function home(){
   const today=iso(new Date());
-  let h=`<h1>Push-Up <span>Tracker</span></h1><div id="sync"></div>
-  <div class="datebar"><button onclick="shift(-1)">‹</button><input type="date" value="${date}" max="${today}" onchange="setDate(this.value)"><button onclick="shift(1)">›</button></div>
+  let h=`<div class="top"><h1>Push-Up <span>Tracker</span></h1>
+  <div class="datebar"><button onclick="shift(-1)" aria-label="Giorno precedente">‹</button><input type="date" value="${date}" max="${today}" onchange="setDate(this.value)" aria-label="Data allenamento"><button onclick="shift(1)" aria-label="Giorno successivo">›</button></div>
+  <div id="sync"></div></div>
+  ${diag?`<div class="card warn"><b>⚠️ Non sincronizzato con Neon</b><br>${esc(diag)}</div>`:''}
   <div class="card big"><b id="t-day">${dayTot(draft)}</b>flessioni ${date===today?'oggi':'in questo giorno'}</div>`;
   T.forEach(([k,n,en,col])=>{
     h+=`<div class="card"><div class="row sp"><div class="row"><span class="dot" style="background:${col}"></span><b>${n}</b><span class="mu">${en}</span></div><span class="tot" id="t-${k}" style="color:${col}">${sum(draft[k])}</span></div>`;
-    draft[k].forEach((v,i)=>{h+=`<div class="row ser"><label>Serie ${i+1}</label><input type="number" inputmode="numeric" min="0" data-k="${k}" value="${v||''}" placeholder="0" oninput="setVal('${k}',${i},this.value)"><button class="dng" onclick="delSet('${k}',${i})">✕</button></div>`});
+    draft[k].forEach((v,i)=>{h+=`<div class="row ser"><label>S${i+1}</label><button class="step" onclick="stepVal('${k}',${i},-1)" aria-label="Riduci serie ${i+1}">−</button><input type="number" inputmode="numeric" min="0" data-k="${k}" data-i="${i}" value="${v||''}" placeholder="0" oninput="setVal('${k}',${i},this.value)" aria-label="Serie ${i+1} ${n}"><button class="step" onclick="stepVal('${k}',${i},1)" aria-label="Aumenta serie ${i+1}">+</button><button class="dng iconbtn" onclick="delSet('${k}',${i})" aria-label="Elimina serie ${i+1}">✕</button></div>`});
     h+=`<button class="add" onclick="addSet('${k}')">＋ Aggiungi serie</button></div>`;
   });
-  h+=`<button class="pri" onclick="save()" ${saving||loading?'disabled':''}>${saving?'⏳ Salvataggio…':'💾 Salva giornata'}</button>`;
+  h+=`<div class="savebar"><button class="pri" onclick="save()" ${saving||loading?'disabled':''}>${saving?'⏳ Salvataggio…':'💾 Salva giornata'}</button></div>`;
   return h;
 }
 
@@ -235,7 +257,7 @@ function history(){
     const e=db[d];
     h+=`<div class="card"><div class="row sp"><b>${fmtDate(d)}</b><span class="tot">${dayTot(e)}</span></div><div>`;
     T.forEach(([k,n,,col])=>{if(e[k]&&e[k].length)h+=`<span class="chip" style="color:${col}">${n}: ${e[k].join(' · ')}</span>`});
-    h+=`</div><div class="row" style="margin-top:10px"><button onclick="edit('${d}')">✏️ Modifica</button><button class="dng" onclick="del('${d}')">🗑 Elimina</button></div></div>`;
+    h+=`</div><div class="row" style="margin-top:10px"><button class="histbtn" onclick="edit('${d}')">✏️ Modifica</button><button class="dng histbtn" onclick="del('${d}')">🗑 Elimina</button></div></div>`;
   });
   return h;
 }

@@ -93,6 +93,7 @@ module.exports = async function handler(req, res) {
     return json(res, 405, { error: 'Metodo non supportato.' });
   } catch (e) {
     console.error('[api/workouts]', e);
-    return json(res, 500, { error: 'Errore database.', detail: process.env.NODE_ENV === 'production' ? undefined : String(e && e.message || e) });
+    // Il messaggio (senza stack/credenziali) serve al frontend per mostrare la causa reale.
+    return json(res, 500, { error: 'Errore database: ' + String((e && e.message) || e) });
   }
 };

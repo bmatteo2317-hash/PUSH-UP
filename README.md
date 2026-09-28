@@ -55,5 +55,17 @@ pushup-tracker.html → originale (solo localStorage, tenuto per riferimento)
 - `GET /api/workouts` → `{ "2026-09-01": {wide:[20,15], close:[10], diamond:[]} }`
 - `POST /api/workouts` body `{date:"YYYY-MM-DD", entry:{wide:[],close:[],diamond:[]}}` → upsert (totale 0 = cancella)
 - `DELETE /api/workouts?date=YYYY-MM-DD` → cancella giornata
+- `GET /api/health` → diagnostica `{ ok, databaseUrlConfigured, tableExists, count, error }`
 
 Il frontend mostra **"Connesso a Neon ☁️"** oppure **"Offline — uso dati locali"** se `DATABASE_URL` manca o il DB non risponde.
+
+## I dati non si salvano su Neon? Checklist
+
+L'app ora mostra un **avviso arancione con la causa esatta** direttamente in Home. Le cause più comuni:
+
+1. **`DATABASE_URL non configurata`** → Vercel Dashboard → Project → Settings → Environment Variables → aggiungi `DATABASE_URL` (connection string *pooled* di Neon) per Production + Preview + Development → **redeploy** (senza redeploy la variabile non viene applicata).
+2. **Tabella mancante** (`relation "workouts" does not exist`) → Neon Dashboard → SQL Editor → incolla `schema.sql` → Run.
+3. **Stai aprendo `index.html` come file locale** (`file://...`) → le `/api` non esistono: apri l'URL Vercel oppure `vercel dev` in locale.
+4. **Test rapido**: apri nel browser `https://TUO-APP.vercel.app/api/health` — ti dice se manca la variabile, la tabella, o quante righe ci sono (`count`).
+
+Dopo aver salvato almeno una giornata con ☁️, verifica su Neon: SQL Editor → `SELECT * FROM workouts;`
